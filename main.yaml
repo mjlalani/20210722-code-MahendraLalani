@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  SNSTopicARN:
+    Type: String
+    Default: !GetAtt  SnsTopic.Arn
+  TopicRegion:
+    Type: String
+    Default: us-east-1
+
+Resources:
+  SnsTopic:
+    Type: AWS::SNS::Topic
+  Outputs:
+    SnsTopicArn:
+    Value: !Ref SnsTopic
+
+  Queue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: My_Queue
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt sqsQueueConsumerDLQ.Arn
+        maxReceiveCount: 5
+      VisibilityTimeout: 600
+
+  sqsEventTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 5
+      Enabled: true
+      EventSourceArn: !GetAtt sqsQueue.Arn
+      FunctionName: MyLambdaFunctio
+
+  SnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      Endpoint: !GetAtt Queue.Arn
+      Region: !Ref TopicRegion
+      TopicArn: !Ref SNSTopicARN   
+   
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      VersioningConfiguration: 
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierRule
+            Prefix: glacier
+            Status: Enabled
+            ExpirationInDays: 365
+            Transitions:
+              - TransitionInDays: 1
+                StorageClass: GLACIER
+     Outputs:
+       BucketName:
+         Value: !Ref S3Bucket
+         Description: My_S3_bucket with a lifecycle and Versoning configuration.
+
+
